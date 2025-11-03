@@ -1,4 +1,3 @@
-GitHub Copilot Chat Assistant
 
 (()=>{
 alert("JS Loaded");
