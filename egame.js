@@ -1,3 +1,5 @@
+GitHub Copilot Chat Assistant
+
 (()=>{
 alert("JS Loaded");
 // core scene setup
@@ -188,7 +190,9 @@ function createPlayer(){
   // apply color tint to emissive
   const col = color3[playerColorIndex];
   if(mesh && mesh.material){
-    mesh.material.emissiveColor = mesh.material.emissiveColor.add(col.scale(0.35));
+    // guard in case material.emissiveColor is undefined for some meshes
+    const baseEm = mesh.material.emissiveColor || new BABYLON.Color3(0,0,0);
+    mesh.material.emissiveColor = baseEm.add(col.scale(0.35));
   }
 
   mesh.position = new BABYLON.Vector3(0, playerY, playerZ);
@@ -222,7 +226,10 @@ function createPortalGate(elementName, colorIndex){
 
   inner.position = new BABYLON.Vector3(0, 0.6, 0);
   inner.rotation.y = Math.random() * Math.PI * 2;
-  if(inner.material) inner.material.emissiveColor = inner.material.emissiveColor.add(color3[colorIndex].scale(0.35));
+  if(inner.material){
+    const baseEm = inner.material.emissiveColor || new BABYLON.Color3(0,0,0);
+    inner.material.emissiveColor = baseEm.add(color3[colorIndex].scale(0.35));
+  }
 
   const holder = new BABYLON.TransformNode("holder_"+Math.random().toString(36).slice(2), scene);
   ring.parent = holder;
@@ -266,17 +273,17 @@ function spawnLoop(){
 
 // ---------- Controls ----------
 const leftZone = document.getElementById('leftZone'), rightZone = document.getElementById('rightZone');
-function leftTap(){ if(!running) return; playerElementIndex = (playerElementIndex + 1) % CONFIG.elements.length; createPlayer(); fadeHint(); switchSound.currentTime = 0; switchSound.play(); }
-function rightTap(){ if(!running) return; playerColorIndex = (playerColorIndex + 1) % CONFIG.colorsHex.length; createPlayer(); fadeHint(); switchSound.currentTime = 0; switchSound.play(); }
-leftZone.addEventListener('pointerdown', leftTap);
-rightZone.addEventListener('pointerdown', rightTap);
+function leftTap(){ if(!running) return; playerElementIndex = (playerElementIndex + 1) % CONFIG.elements.length; createPlayer(); fadeHint(); try{ switchSound.currentTime = 0; switchSound.play(); }catch(e){} }
+function rightTap(){ if(!running) return; playerColorIndex = (playerColorIndex + 1) % CONFIG.colorsHex.length; createPlayer(); fadeHint(); try{ switchSound.currentTime = 0; switchSound.play(); }catch(e){} }
+if(leftZone) leftZone.addEventListener('pointerdown', leftTap);
+if(rightZone) rightZone.addEventListener('pointerdown', rightTap);
 window.addEventListener('keydown', (e)=>{ if(!running) return; if(e.key==='a'||e.key==='ArrowLeft') leftTap(); if(e.key==='d'||e.key==='ArrowRight') rightTap(); });
 
-function fadeHint(){ hintText.style.opacity = '0.3'; setTimeout(()=>hintText.style.opacity='1', 1600); }
+function fadeHint(){ if(hintText) { hintText.style.opacity = '0.3'; setTimeout(()=>hintText.style.opacity='1', 1600); } }
 
 // HUD helpers
-function setScore(v){ score = v; scoreHud.textContent = 'Score: ' + score; }
-function setSpeedHUD(val){ speedHud.textContent = 'Speed: ' + (val.toFixed(2)); }
+function setScore(v){ score = v; if(scoreHud) scoreHud.textContent = 'Score: ' + score; }
+function setSpeedHUD(val){ if(speedHud) speedHud.textContent = 'Speed: ' + (val.toFixed(2)); }
 
 // ---------- Main loop ----------
 let last = performance.now();
@@ -335,7 +342,7 @@ function frame(){
 }
 
 // HUD pulse
-function pulseHUDOnSpeedIncrease(){ speedHud.style.transition = 'transform 0.28s ease'; speedHud.style.transform = 'scale(1.15)'; setTimeout(()=>speedHud.style.transform='scale(1)',280); }
+function pulseHUDOnSpeedIncrease(){ if(speedHud){ speedHud.style.transition = 'transform 0.28s ease'; speedHud.style.transform = 'scale(1.15)'; setTimeout(()=>speedHud.style.transform='scale(1)',280); } }
 
 // game over
 function triggerGameOver(){
@@ -361,9 +368,11 @@ function showGameOverUI(){
   const arr = JSON.parse(localStorage.getItem(key) || '[]');
   arr.push(score); arr.sort((a,b)=>b-a); const top = arr.slice(0,5);
   localStorage.setItem(key, JSON.stringify(top));
-  document.getElementById('finalScore').textContent = String(score);
-  document.getElementById('bestScore').textContent = String(top[0] || score);
-  document.getElementById('gameOverUI').style.display = 'flex';
+  const finalScoreEl = document.getElementById('finalScore');
+  const bestScoreEl = document.getElementById('bestScore');
+  if(finalScoreEl) finalScoreEl.textContent = String(score);
+  if(bestScoreEl) bestScoreEl.textContent = String(top[0] || score);
+  if(gameOverUI) gameOverUI.style.display = 'flex';
 }
 
 // start/reset
@@ -373,8 +382,8 @@ function startGame(){
   score = 0; setScore(0); speed = CONFIG.baseSpeed; passesSinceSpeedUp = 0; slowMotionUntil = 0;
   playerElementIndex = 0; playerColorIndex = 0;
   createPlayer();
-  startUI.style.display = 'none';
-  gameOverUI.style.display = 'none';
+  if(startUI) startUI.style.display = 'none';
+  if(gameOverUI) gameOverUI.style.display = 'none';
   running = true;
   last = performance.now();
   // start spawning and main loop
@@ -383,10 +392,17 @@ function startGame(){
 }
 
 // UI wiring
-document.getElementById('playBtn').addEventListener('click', startGame);
-document.getElementById('howBtn').addEventListener('click', ()=> alert('Tap left half to cycle element (Water → Lightning → Fire). Tap right half to cycle color. Match both element & color of portal to pass.'));
-document.getElementById('retryBtn').addEventListener('click', ()=> { document.getElementById('gameOverUI').style.display = 'none'; startGame(); });
-document.getElementById('homeBtn').addEventListener('click', ()=> { document.getElementById('gameOverUI').style.display = 'none'; document.getElementById('startUI').style.display = 'flex'; });
+const playBtn = document.getElementById('playBtn');
+if(playBtn) playBtn.addEventListener('click', startGame);
+
+const howBtn = document.getElementById('howBtn');
+if(howBtn) howBtn.addEventListener('click', ()=> alert('Tap left half to cycle element (Water → Lightning → Fire). Tap right half to cycle color. Match both element and color to pass gates.'));
+
+const retryBtn = document.getElementById('retryBtn');
+if(retryBtn) retryBtn.addEventListener('click', ()=> { if(gameOverUI) gameOverUI.style.display = 'none'; startGame(); });
+
+const homeBtn = document.getElementById('homeBtn');
+if(homeBtn) homeBtn.addEventListener('click', ()=> { if(gameOverUI) gameOverUI.style.display = 'none'; if(startUI) startUI.style.display = 'flex'; });
 
 // initial idle render
 engine.runRenderLoop(()=>{ if(!running) scene.render(); });
